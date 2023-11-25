@@ -23,6 +23,6 @@ Advanced Information Retrieval Project 2023 for Group6
 
 ### Run the code
 
-```
+```bash
 python air/main.py
 ```
