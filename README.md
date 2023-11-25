@@ -6,13 +6,13 @@ Advanced Information Retrieval Project 2023 for Group6
 
 ### Pre-requisites
 
-- Python 3.8+
+- Python 3.11
 
 ### Installation Steps
 
 1. Clone the repository and `cd` into it
 2. Create a virtual environment
-   - `python3 -m venv .venv`
+   - `python3.11 -m venv .venv`
 3. Activate the virtual environment
 
 - `source .venv/bin/activate`
