@@ -24,7 +24,7 @@ class PreProcessor(Processor):
             nltk.corpus.stopwords.words("english") + list(string.punctuation)
         )
         self.stemmer = CachedPorterStemmer()
-        super().__init__("Review Preprocessing Small")
+        super().__init__("Review Preprocessing")
 
     def to_lower(self, data, col):
         return data.with_columns(pl.col(col).str.to_lowercase())
