@@ -41,14 +41,14 @@ print(input_df.groupby(output_col).agg(pl.count("*")))
 
 
 # Make a 80/20 split
-test_data = input_df.sample(fraction=0.2, seed=123, shuffle=True)
+test_data = input_df.sample(fraction=0.4, seed=123, shuffle=True)
 val_data = test_data.sample(fraction=0.5, seed=123, shuffle=True)
 train_data = input_df.filter(pl.col("row_nr").is_in(test_data["row_nr"]).not_())
 print(train_data.groupby(output_col).agg(pl.count("*")))
 test_data = test_data.filter(pl.col("row_nr").is_in(val_data["row_nr"]).not_())
 
 count_vectorizer = CountVectorizer(binary=True)
-count_vectorizer.fit(train_data[input_col])
+count_vectorizer.fit(input_df[input_col])
 
 train_x = count_vectorizer.transform(train_data[input_col])
 test_x = count_vectorizer.transform(test_data[input_col])
@@ -79,6 +79,9 @@ param = {
 xgb_model = xgb.train(
     param, xgb_train, 50, verbose_eval=1, evals=[(xgb_val, "val")], num_boost_round=20
 )
+
+xgb_model.save_model("air/data/models/xgboost.json")
+
 # Test the predictions
 y_pred = xgb_model.predict(xgb_test).astype(int)
 test_y = test_y.astype(int)
