@@ -1,7 +1,9 @@
 import polars as pl
+import time
 import nltk
 import string
 from functools import lru_cache
+import multiprocessing
 
 from air.processing.processor import Processor
 
@@ -25,47 +27,30 @@ class PreProcessor(Processor):
         super().__init__("Review Preprocessing")
 
     def to_lower(self, data, col):
-        print("     Converting strings to lowercase...")
         return data.with_columns(pl.col(col).str.to_lowercase())
 
     def create_tokens(self, data, col):
-        print("     Creating tokens...")
         return data.with_columns(pl.col(col).str.split(" "))
 
     def remove_punctuation(self, data, col):
-        print("     Removing punctuation...")
         return data.with_columns(pl.col(col).str.replace_all("[^\w\s]", ""))
 
     def remove_numbers(self, data, col):
-        print("     Removing numbers...")
         return data.with_columns(pl.col(col).str.replace_all("\d+", ""))
 
     def _stem_words(self, word_tokens):
-        global stem_cnt
-        global total_cnt
-        stem_cnt += 1
-        done_perc = (stem_cnt / total_cnt) * 100
-        print(f"     Stemming words... ({done_perc:.2f}%)", end="\r")
-
         for idx, word in enumerate(word_tokens):
             word_tokens[idx] = self.stemmer.stem(word)
         return word_tokens
 
     def stem_words(self, data, col):
-        print("     Stemming words...")
         return data.with_columns(pl.col(col).map_elements(self._stem_words))
 
     def join_tokens(self, data, col):
-        print("     Joining tokens...")
         return data.with_columns(pl.col(col).list.join(" "))
 
-    def _process_inner(self, data: pl.DataFrame) -> pl.DataFrame:
-        global total_cnt
-        # slice data to only include the first 1000 rows
-        data = data.slice(0, 1000)
-        total_cnt = data.select(pl.count())[0, 0]
-        out_col = "preprocessed_review/text"
-        data = data.with_columns(pl.col("review/text").alias(out_col))
+    def _processor_target(self, data, out_col) -> pl.DataFrame:
+        print("     Starting subprocess...")
 
         res = (
             data.lazy()
@@ -77,3 +62,24 @@ class PreProcessor(Processor):
             .pipe(self.join_tokens, out_col)
         )
         return res.collect()
+
+    def _process_inner(self, data: pl.DataFrame) -> pl.DataFrame:
+        out_col = "preprocessed_review/text"
+        data = data.with_columns(pl.col("review/text").alias(out_col))
+
+        # Split data into 5 chunks
+        start_time = time.time()
+        data_chunks = []
+        num_processes = 1
+        chunk_size = len(data) // num_processes
+        for i in range(num_processes):
+            data_chunks.append(data.slice(i * chunk_size, (i + 1) * chunk_size))
+
+        # Run in parallel
+        with multiprocessing.get_context("spawn").Pool(num_processes) as pool:
+            args = [(chunk, out_col) for chunk in data_chunks]
+            res = pool.starmap(self._processor_target, args)
+
+        data = pl.concat(res)
+        print(f"     Finished in {time.time() - start_time:.2f} seconds")
+        return data
