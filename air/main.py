@@ -1,13 +1,13 @@
 from air.processing.preprocessing import PreProcessor
 
 # from air.data.load import load_raw_data
-from air.data.load import load_raw_data_small
+from air.data.load import load_raw_data
 
 preprocessor = PreProcessor()
 
 
 def main():
-    data = load_raw_data_small()
+    data = load_raw_data()
     res = preprocessor.process(data)
     print(res.head())
 
