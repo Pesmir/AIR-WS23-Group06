@@ -21,16 +21,6 @@ class Evaluation:
         self.y_result = y_result
         self.y_pred = y_pred
 
-    def f1_scores(self):
-        scores = []
-        print(self.y_result)
-        print(self.y_pred)
-        for y in self.y_pred:
-            print(y)
-            scores.append(f1_score(self.y_result, y))
-        graphs(scores, 'F1 Score', 'F1 Scores of Different Models')
-        return scores
-
     def mae_scores(self):
         scores = []
         for y in self.y_pred:
