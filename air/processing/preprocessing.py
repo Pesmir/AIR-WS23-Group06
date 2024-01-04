@@ -1,4 +1,5 @@
 import polars as pl
+import gc
 import time
 import nltk
 import string
@@ -20,11 +21,13 @@ class CachedPorterStemmer(nltk.PorterStemmer):
 
 class PreProcessor(Processor):
     def __init__(self):
+        self._num_done_iterations = 0
+        self._num_total_iterations = 0
         self.to_remove = set(
             nltk.corpus.stopwords.words("english") + list(string.punctuation)
         )
         self.stemmer = CachedPorterStemmer()
-        super().__init__("Review Preprocessing")
+        super().__init__("Review Preprocessing Full")
 
     def to_lower(self, data, col):
         return data.with_columns(pl.col(col).str.to_lowercase())
@@ -41,6 +44,12 @@ class PreProcessor(Processor):
     def _stem_words(self, word_tokens):
         for idx, word in enumerate(word_tokens):
             word_tokens[idx] = self.stemmer.stem(word)
+        self._num_done_iterations += 1
+        if self._num_done_iterations % 1000 == 0:
+            thread_name = multiprocessing.current_process().name
+            print(
+                f"     Thread {thread_name}: {self._num_done_iterations}/{self._num_total_iterations}"
+            )
         return word_tokens
 
     def stem_words(self, data, col):
@@ -51,6 +60,7 @@ class PreProcessor(Processor):
 
     def _processor_target(self, data, out_col) -> pl.DataFrame:
         print("     Starting subprocess...")
+        self._num_total_iterations = len(data)
 
         res = (
             data.lazy()
@@ -70,11 +80,13 @@ class PreProcessor(Processor):
         # Split data into 5 chunks
         start_time = time.time()
         data_chunks = []
-        num_processes = 1
+        num_processes = 10
         chunk_size = len(data) // num_processes
         for i in range(num_processes):
-            data_chunks.append(data.slice(i * chunk_size, (i + 1) * chunk_size))
+            data_chunks.append(data.slice(i * chunk_size, chunk_size))
 
+        del data
+        gc.collect()
         # Run in parallel
         with multiprocessing.get_context("spawn").Pool(num_processes) as pool:
             args = [(chunk, out_col) for chunk in data_chunks]
