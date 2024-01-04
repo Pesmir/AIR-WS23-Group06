@@ -80,10 +80,10 @@ class PreProcessor(Processor):
         # Split data into 5 chunks
         start_time = time.time()
         data_chunks = []
-        num_processes = 5
+        num_processes = 10
         chunk_size = len(data) // num_processes
         for i in range(num_processes):
-            data_chunks.append(data.slice(i * chunk_size, (i + 1) * chunk_size))
+            data_chunks.append(data.slice(i * chunk_size, chunk_size))
 
         del data
         gc.collect()
