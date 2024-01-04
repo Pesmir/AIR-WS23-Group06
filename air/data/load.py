@@ -11,5 +11,9 @@ def load_raw_data_small() -> pl.DataFrame:
     return frame.sample(fraction=0.1, seed=42)
 
 
+def load_preprocessed_data() -> pl.DataFrame:
+    return pl.read_ipc("air/data/checkpoints/Review Preprocessing Full.ipc")
+
+
 def load_preprocessed_data_small() -> pl.DataFrame:
     return pl.read_ipc("air/data/checkpoints/Review Preprocessing.ipc")
