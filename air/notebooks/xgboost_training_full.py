@@ -1,6 +1,8 @@
 from air.data.load import load_preprocessed_data
 from sklearn.feature_extraction.text import CountVectorizer
 import xgboost as xgb
+import os
+import pickle
 import polars as pl
 import numpy as np
 
@@ -17,6 +19,7 @@ output_col = "review/score"
 input_df = input_df.select([input_col, output_col]).with_row_count("row_nr")
 # Convert review scores to integers
 input_df = input_df.with_columns(pl.col(output_col).cast(pl.Int8))
+
 # plot histogram of review scores
 # plt.hist(input_df[output_col].to_numpy().astype(str))
 # plt.show()
@@ -35,18 +38,26 @@ for target_class in input_df[output_col].unique().to_numpy():
     class_df = class_df.sample(n=smallest_class_count, seed=123, shuffle=True)
     new_input_df = new_input_df.vstack(class_df)
 input_df = new_input_df
-print(input_df.groupby(output_col).agg(pl.count("*")))
 
-
-# Make a 80/20 split
+# 3. Make a 80/20 split
 test_data = input_df.sample(fraction=0.4, seed=123, shuffle=True)
 val_data = test_data.sample(fraction=0.5, seed=123, shuffle=True)
 train_data = input_df.filter(pl.col("row_nr").is_in(test_data["row_nr"]).not_())
 test_data = test_data.filter(pl.col("row_nr").is_in(val_data["row_nr"]).not_())
 
-count_vectorizer = CountVectorizer(binary=True)
-count_vectorizer.fit(input_df[input_col])
+if not os.path.exists("air/data/models/xgboost_countvectorizer_full.pkl"):
+    count_vectorizer = CountVectorizer(binary=True)
+    count_vectorizer.fit(input_df[input_col])
 
+    # Save the vectorizer
+    with open("air/data/models/xgboost_countvectorizer_full.pkl", "wb") as f:
+        pickle.dump(count_vectorizer, f)
+else:
+    with open("air/data/models/xgboost_countvectorizer_full.pkl", "rb") as f:
+        count_vectorizer = pickle.load(f)
+
+
+print("Transforming data")
 train_x = count_vectorizer.transform(train_data[input_col])
 test_x = count_vectorizer.transform(test_data[input_col])
 val_x = count_vectorizer.transform(val_data[input_col])
@@ -64,7 +75,7 @@ xgb_val = xgb.DMatrix(val_x, label=val_y, enable_categorical=True)
 param = {
     "eta": 0.9,
     "max_depth": 5,
-    "subsample": 0.7,
+    "subsample": 0.1,
     "grow_policy": "lossguide",
     "num_parallel_tree": 3,
     "objective": "multi:softmax",
@@ -73,6 +84,7 @@ param = {
     "eval_metric": ["mlogloss", "merror"],
 }
 
+print("Training model")
 xgb_model = xgb.train(
     param, xgb_train, 50, verbose_eval=1, evals=[(xgb_val, "val")], num_boost_round=20
 )

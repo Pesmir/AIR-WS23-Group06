@@ -19,7 +19,7 @@ class CachedPorterStemmer(nltk.PorterStemmer):
         return super().stem(word)
 
 
-class PreProcessor(Processor):
+class ReviewPreprocessor(Processor):
     def __init__(self):
         self._num_done_iterations = 0
         self._num_total_iterations = 0
@@ -94,4 +94,29 @@ class PreProcessor(Processor):
 
         data = pl.concat(res)
         print(f"     Finished in {time.time() - start_time:.2f} seconds")
+        return data
+
+
+class DropNullReviewsPreprocessor(Processor):
+    def __init__(self):
+        super().__init__("Drop Null Reviews")
+
+    def _process_inner(self, data: pl.DataFrame) -> pl.DataFrame:
+        in_col = "preprocessed_review/text"
+        return data.filter(pl.col(in_col).is_not_null())
+
+
+class HelpfulnessPreprocessor(Processor):
+    def __init__(self):
+        super().__init__("Helpfulnessratio")
+
+    def _process_inner(self, data: pl.DataFrame) -> pl.DataFrame:
+        in_col = "review/helpfulness"
+        data = data.with_columns(pl.col(in_col).str.replace_all("[^\d/]", ""))
+        data = data.with_columns(pl.col(in_col).str.split("/"))
+        data = data.with_columns(
+            pl.col(in_col).map_elements(
+                lambda x: (int(x[0]) / int(x[1]) if int(x[1]) != 0 else 0)
+            )
+        )
         return data

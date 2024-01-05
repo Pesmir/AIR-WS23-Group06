@@ -12,7 +12,8 @@ def load_raw_data_small() -> pl.DataFrame:
 
 
 def load_preprocessed_data() -> pl.DataFrame:
-    return pl.read_ipc("air/data/checkpoints/Review Preprocessing Full.ipc")
+    # Change name if additional preprocessing steps are added
+    return pl.read_ipc("air/data/checkpoints/Helpfulnessratio.ipc")
 
 
 def load_preprocessed_data_small() -> pl.DataFrame:
