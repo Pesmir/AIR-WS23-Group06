@@ -85,11 +85,22 @@ param = {
 }
 
 print("Training model")
-xgb_model = xgb.train(
-    param, xgb_train, 50, verbose_eval=1, evals=[(xgb_val, "val")], num_boost_round=20
-)
+if not os.path.exists("air/data/models/xgboost_full.pkl"):
+    xgb_model = xgb.train(
+        param,
+        xgb_train,
+        50,
+        verbose_eval=1,
+        evals=[(xgb_val, "val")],
+        num_boost_round=20,
+    )
+    xgb_model.save_model("air/data/models/xgboost_full.json")
+    with open("air/data/models/xgboost_full.pkl", "wb") as f:
+        pickle.dump(xgb_model, f)
+else:
+    with open("air/data/models/xgboost_full.pkl", "rb") as f:
+        xgb_model = pickle.load(f)
 
-xgb_model.save_model("air/data/models/xgboost_full.json")
 
 # Test the predictions
 y_pred = xgb_model.predict(xgb_test).astype(int)

@@ -73,6 +73,12 @@ class ReviewPreprocessor(Processor):
         )
         return res.collect()
 
+    def process_value(self, value):
+        # Lets built an artificaial DataFrame
+        data = pl.DataFrame({"review/text": [value]})
+        data = self._process_inner(data)
+        return data
+
     def _process_inner(self, data: pl.DataFrame) -> pl.DataFrame:
         out_col = "preprocessed_review/text"
         data = data.with_columns(pl.col("review/text").alias(out_col))
@@ -80,7 +86,9 @@ class ReviewPreprocessor(Processor):
         # Split data into 5 chunks
         start_time = time.time()
         data_chunks = []
-        num_processes = 10
+        num_processes = min(10, len(data))
+        if num_processes < 2:
+            return self._processor_target(data, out_col)
         chunk_size = len(data) // num_processes
         for i in range(num_processes):
             data_chunks.append(data.slice(i * chunk_size, chunk_size))
