@@ -121,10 +121,116 @@ class HelpfulnessPreprocessor(Processor):
     def _process_inner(self, data: pl.DataFrame) -> pl.DataFrame:
         in_col = "review/helpfulness"
         data = data.with_columns(pl.col(in_col).str.replace_all("[^\d/]", ""))
-        data = data.with_columns(pl.col(in_col).str.split("/"))
         data = data.with_columns(
-            pl.col(in_col).map_elements(
-                lambda x: (int(x[0]) / int(x[1]) if int(x[1]) != 0 else 0)
+            pl.col(in_col).str.split("/").list.get(0).cast(int).alias("num_helpfull"),
+            pl.col(in_col).str.split("/").list.get(1).cast(int).alias("num_total"),
+        )
+        # Calculate the ratio
+        # We set reviews where the number of total helpfulness less then 2
+        # to 0
+        # Set to 1 if num total is 0
+        data = data.with_columns(
+            pl.when(pl.col("num_total") < 2)
+            .then(0)
+            .otherwise(pl.col("num_helpfull") / pl.col("num_total"))
+            .alias("review/helpfulness")
+        )
+        return data.drop(["num_helpfull", "num_total"])
+
+
+class FilterUsersWithLessThen50Reviews(Processor):
+    def __init__(self):
+        super().__init__("Filter Users")
+
+    def _process_inner(self, data: pl.DataFrame) -> pl.DataFrame:
+        filtered_users = (
+            data.select("User_id")
+            .group_by(by="User_id")
+            .count()
+            .filter(pl.col("count") > 50)
+        )
+        return data.join(filtered_users, on="User_id", how="inner").drop("count")
+
+
+class SplitReviewTokens(Processor):
+    def __init__(self):
+        super().__init__("Split Review Tokens")
+
+    def _process_inner(self, data: pl.DataFrame) -> pl.DataFrame:
+        in_col = "preprocessed_review/text"
+        out_col = "preprocessed_review/tokens"
+        return data.with_columns(pl.col(in_col).str.split(" ").alias(out_col))
+
+
+class DropNotNeededColumns(Processor):
+    def __init__(self):
+        super().__init__("Drop Not Needed Columns")
+
+    def _process_inner(self, data: pl.DataFrame) -> pl.DataFrame:
+        needed_cols = [
+            "Id",
+            "Title",
+            "User_id",
+            "review/helpfulness",
+            "review/score",
+            "review/text",
+        ]
+        return data.select(needed_cols)
+
+
+class DropEmptyReviewsAndUsers(Processor):
+    def __init__(self):
+        super().__init__("Drop Empty Reviews And Users")
+
+    def _process_inner(self, data: pl.DataFrame) -> pl.DataFrame:
+        return data.filter(pl.col("review/text").is_not_null())
+
+
+class HelpfulnessPredictionInputProcessor(Processor):
+    def __init__(self):
+        super().__init__("Helpfulness Prediction Input")
+
+    def _process_inner(self, data: pl.DataFrame) -> pl.DataFrame:
+        output_col = "input/helpfulnessprediction"
+        num_chars = data["review/text"].str.len_chars()
+        num_words = data["review/text"].str.split(" ").list.len()
+        num_sentences = (
+            data["review/text"].str.replace_all("[!?]", ".").str.split(".").list.len()
+        )
+        num_long_words = (
+            data["review/text"]
+            .str.split(" ")
+            .map_elements(lambda s: s.str.len_chars() > 6)
+            .list.sum()
+        )
+
+        # Formular taken from:
+        # https://www.tutorialspoint.com/readability-index-in-python-nlp
+        readability_ari = (
+            4.71 * (num_chars / num_words) + 0.5 * (num_words / num_sentences) - 21.43
+        )
+        rate_index = num_long_words / num_words
+
+        input_values = list(
+            zip(
+                rate_index.cast(float),
+                readability_ari.cast(float),
+                num_sentences.cast(float),
+                num_words.cast(float),
             )
         )
+        data = data.with_columns(pl.Series(name=output_col, values=input_values))
+        return data
+
+
+class PreprocessingFinalizer(Processor):
+    """
+    This is just an artificial processor that is used to
+    save the final preprocessed data to disk
+    """
+
+    def __init__(self):
+        super().__init__("Finale Preprocessing")
+
+    def _process_inner(self, data: pl.DataFrame) -> pl.DataFrame:
         return data
