@@ -1,10 +1,19 @@
+import polars as pl
+from air.models.recommender_system import RecommenderSystem
 from air.processing.preprocessing import (
+    DropEmptyReviewsAndUsers,
+    DropNotNeededColumns,
+    HelpfulnessPredictionInputProcessor,
+    PreprocessingFinalizer,
     ReviewPreprocessor,
     DropNullReviewsPreprocessor,
     HelpfulnessPreprocessor,
+    FilterUsersWithLessThen50Reviews,
+    SplitReviewTokens,
 )
 
 from air.processing.model_predictions import (
+    XGBoostHelpfulnessPredictionProcessor,
     XGBoostModelPredictionProcessor,
     BertModelPredictionProcessor,
 )
@@ -16,18 +25,49 @@ from air.data.load import load_raw_data
 def main():
     data = load_raw_data()
     # 1. Preprocessing
-    res = ReviewPreprocessor().process(data)
+    res = DropNotNeededColumns().process(data)
+    res = DropEmptyReviewsAndUsers().process(res)
+    res = FilterUsersWithLessThen50Reviews().process(res)
+    res = ReviewPreprocessor().process(res)
     res = DropNullReviewsPreprocessor().process(res)
     res = HelpfulnessPreprocessor().process(res)
+    res = SplitReviewTokens().process(res)
+    res = HelpfulnessPredictionInputProcessor().process(res)
+    res = PreprocessingFinalizer().process(res)
     # The models where trainend beforehand and the corresponding files are
     # loaded in air/processing/model_predictions.py
 
-    # 2. Model predictions
+    # 2. Add Model predictions
     res = XGBoostModelPredictionProcessor().process(res)
-    res = BertModelPredictionProcessor(fine_tuned=False).process(res)
+    # res = BertModelPredictionProcessor(fine_tuned=False).process(res)
+    # res = BertModelPredictionProcessor(fine_tuned=True).process(res)
+    # res = Word2VecModelPredictionProcessor().process(res)
 
-    print(res.head())
-    print(res.columns)
+    # 2.5 Add Helpfulnes prediction
+    res = XGBoostHelpfulnessPredictionProcessor().process(res)
+
+    # 3. Recommend book by user
+    selected_user = "A1CGLIDN7E5MK8"
+    recommender = RecommenderSystem(
+        res,
+        num_sim_users=5,  # lower means less conservative
+        num_recommendations=8,
+        rating_model="xgboost",
+        helpfulness_model="xgboost_helpfulness",
+    )
+    recs = recommender.recommend_books_based_on_similar_users(selected_user)
+    liked = (
+        res.filter(pl.col("User_id") == selected_user)
+        .sort(by="review/score")
+        .select("Title", "review/score")
+        .filter(pl.col("review/score") == 5.0)
+        .sample(n=8)
+    )
+
+    print("RECOMMENDED")
+    print(recs)
+    print("5 STAR BOOKS BY USER (Random 8 samples)")
+    print(liked)
 
 
 if __name__ == "__main__":

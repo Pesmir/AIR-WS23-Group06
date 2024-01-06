@@ -1,6 +1,8 @@
+import os
 import torch
 import polars as pl
 import xgboost as xgb
+import numpy as np
 import pickle
 from tqdm import tqdm
 from transformers import BertTokenizer, BertForSequenceClassification
@@ -17,8 +19,14 @@ class ModelPredictionProcessorBase(Processor):
         raise NotImplementedError()
 
     def process(self, data: pl.DataFrame) -> pl.DataFrame:
-        print(f"Predicting {self.name}...")
-        result = self._predict_inner(data, self.name)
+        print(f"Processing {self.name}...")
+        if os.path.exists(self._check_point_path):
+            print(f"Found checkpoint for {self.name}, loading...")
+            result = pl.read_ipc(self._check_point_path)
+        else:
+            result = self._predict_inner(data, self.name)
+            print(f"Saving checkpoint for {self.name} in {self._check_point_path}...")
+            result.write_ipc(self._check_point_path)
         return result
 
     def predict_value(self, value) -> pl.DataFrame:
@@ -76,5 +84,19 @@ class BertModelPredictionProcessor(ModelPredictionProcessorBase):
                 outputs = self._model(**inputs)
                 prediction = torch.argmax(outputs.logits, dim=1)
                 predictions.append(float(prediction.item() + 1))
+        data = data.with_columns(pl.Series(name=output_col, values=predictions))
+        return data
+
+
+class XGBoostHelpfulnessPredictionProcessor(ModelPredictionProcessorBase):
+    def __init__(self):
+        super().__init__("xgboost_helpfulness")
+        with open("air/data/models/xgboost_helpfulness.pkl", "rb") as f:
+            self._model = pickle.load(f)
+
+    def _predict_inner(self, data: pl.DataFrame, output_col: str) -> pl.DataFrame:
+        x = np.stack(data["input/helpfulnessprediction"].to_numpy())
+        x = xgb.DMatrix(x)
+        predictions = np.clip(self._model.predict(x), 0.0, 1.0)
         data = data.with_columns(pl.Series(name=output_col, values=predictions))
         return data
