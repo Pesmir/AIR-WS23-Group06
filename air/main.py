@@ -63,8 +63,8 @@ def main():
 
     # 2. Add Model predictions
     res = XGBoostModelPredictionProcessor().process(res)
-    # res = BertModelPredictionProcessor(fine_tuned=False).process(res)
-    # res = BertModelPredictionProcessor(fine_tuned=True).process(res)
+    res = BertModelPredictionProcessor(fine_tuned=False).process(res)
+    res = BertModelPredictionProcessor(fine_tuned=True).process(res)
     # res = Word2VecModelPredictionProcessor().process(res)
 
     # 2.5 Add Helpfulnes prediction
