@@ -190,6 +190,12 @@ class HelpfulnessPredictionInputProcessor(Processor):
     def __init__(self):
         super().__init__("Helpfulness Prediction Input")
 
+    def process_value(self, value):
+        # Lets built an artificaial DataFrame
+        data = pl.DataFrame({"review/text": [value]})
+        data = self._process_inner(data)
+        return data
+
     def _process_inner(self, data: pl.DataFrame) -> pl.DataFrame:
         output_col = "input/helpfulnessprediction"
         num_chars = data["review/text"].str.len_chars()

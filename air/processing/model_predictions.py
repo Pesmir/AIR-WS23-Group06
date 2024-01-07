@@ -7,7 +7,10 @@ import pickle
 from tqdm import tqdm
 from transformers import BertTokenizer, BertForSequenceClassification
 from air.processing.processor import Processor
-from air.processing.preprocessing import ReviewPreprocessor
+from air.processing.preprocessing import (
+    HelpfulnessPredictionInputProcessor,
+    ReviewPreprocessor,
+)
 
 
 class ModelPredictionProcessorBase(Processor):
@@ -93,6 +96,10 @@ class XGBoostHelpfulnessPredictionProcessor(ModelPredictionProcessorBase):
         super().__init__("xgboost_helpfulness")
         with open("air/data/models/xgboost_helpfulness.pkl", "rb") as f:
             self._model = pickle.load(f)
+
+    def predict_value(self, value) -> pl.DataFrame:
+        value = HelpfulnessPredictionInputProcessor().process_value(value)
+        return self._predict_inner(value, self.name)[self.name].to_numpy().flatten()[0]
 
     def _predict_inner(self, data: pl.DataFrame, output_col: str) -> pl.DataFrame:
         x = np.stack(data["input/helpfulnessprediction"].to_numpy())
