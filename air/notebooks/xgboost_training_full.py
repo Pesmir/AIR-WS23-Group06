@@ -39,7 +39,7 @@ for target_class in input_df[output_col].unique().to_numpy():
     new_input_df = new_input_df.vstack(class_df)
 input_df = new_input_df
 
-# 3. Make a 80/20 split
+# 3. Make a 60/40 split
 test_data = input_df.sample(fraction=0.4, seed=123, shuffle=True)
 val_data = test_data.sample(fraction=0.5, seed=123, shuffle=True)
 train_data = input_df.filter(pl.col("row_nr").is_in(test_data["row_nr"]).not_())
