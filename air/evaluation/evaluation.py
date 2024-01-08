@@ -3,16 +3,23 @@ import matplotlib.pyplot as plt
 
 
 def graphs(scores, ylabel, title):
-    models = ['BERT', 'WordVec', 'XGBoost']
-    plt.figure(figsize=(8, 6))
-    plt.bar(models, scores, color=['blue', 'green', 'orange'])
+    models = ['BERT', 'BERT finetuned', 'XGBoost', 'XGBoost + Word2Vec']
+    colors = ['skyblue', 'lightgreen', 'lightcoral', 'lightsalmon']
+
+    plt.figure(figsize=(10, 7))
+    bars = plt.bar(models, scores, color=colors)
+
+    for bar, score in zip(bars, scores):
+        plt.text(bar.get_x() + bar.get_width() / 2 - 0.1, bar.get_height() + 1, str(score), fontsize=10)
 
     plt.title(title)
     plt.xlabel('Models')
     plt.ylabel(ylabel)
+    plt.subplots_adjust(bottom=0.25)
 
-    plt.xticks(rotation=45)
-    plt.tight_layout()
+    plt.xticks(rotation=45, ha='right')
+
+
     plt.show()
 
 
