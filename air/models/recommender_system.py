@@ -96,7 +96,7 @@ class RecommenderSystem:
             # We want to weigh ratings with a higher helpfulness
             # stronger
             .mul(pl.col(self.helpfulness_model))
-            .mean()
+            .sum()
             .alias("book_recommendation_score")
         )
 

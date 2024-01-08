@@ -1,14 +1,17 @@
 import streamlit as st
 import polars as pl
 import xgboost as xgb
-from air.data.load import load_preprocessed_data_small
+from air.data.load import load_final_data, load_preprocessed_data_small
 from air.processing.model_predictions import (
     XGBoostModelPredictionProcessor,
     BertModelPredictionProcessor,
+    XGBoostHelpfulnessPredictionProcessor,
 )
+from air.processing.preprocessing import HelpfulnessPredictionInputProcessor
+from air.models.recommender_system import RecommenderSystem
 
 
-def start(data, models):
+def start(data, models, helpfullness_model, recommender_model):
     st.title("Book Recommender System")
     st.subheader("AIR Prject WS 2023/2024")
     st.write("This app recommend books based on previous reviews of a user")
@@ -43,36 +46,56 @@ def start(data, models):
             "Select a user id and get a list of recommended books\n"
             "For simplicity, we only show users that rated at least 200 books"
         )
-        user_id = st.selectbox("User ID", users)
-
-        # Get recommendations
-        books_read = (
-            data.filter(pl.col("User_id") == user_id)
-            .sort(by="review/score", descending=True)
-            .select(pl.col("Title"), pl.col("review/score"))
-            .to_pandas()
-        )
-        st.write("Books read by the user sorted by rating (best first)")
-        st.write(books_read)
-        st.write("Recommendations:")
-        # TODO: Replace with actual recommendations
-        st.write(books_read[:10])
+        st.write("Some random users:")
+        st.write(*users[:10])
+        user_id = st.text_input("User ID")
+        if user_id:
+            print(user_id)
+            recs = recommender.recommend_books_based_on_similar_users(user_id)
+            liked = (
+                data.filter(pl.col("User_id") == user_id)
+                .select("Title", "review/text", "review/score")
+                .sort(by="review/score", descending=True)
+            )
+            cols = st.columns(2)
+            cols[0].write("Books read by user")
+            cols[0].write(liked.to_pandas())
+            cols[1].write("Recommendations:")
+            cols[1].write(recs.to_pandas())
 
     with tab2:
         st.header("Rate my review")
-        st.write("Enter a review and get a rating")
+        st.write(
+            "Enter a review and get a recommended rating and an indicator on it's helpfullness"
+        )
         review = st.text_input("Review")
         if review:
             score = int(model.predict_value(review))
+            helpfulness = helpfullness_model.predict_value(review)
             st.write(f"Based on you review we suggest a rating of {score}/5 stars")
+            st.write(
+                f"Your review is {helpfulness:.2%} helpful to other users. (Based on a xgboost model)"
+            )
 
 
 if __name__ == "__main__":
-    data = load_preprocessed_data_small()
-
+    data = load_final_data().sample(fraction=0.1, seed=42)
     # Init xgboost from json file
     models = {
         "xgboost": XGBoostModelPredictionProcessor(),
         "bert-base": BertModelPredictionProcessor(fine_tuned=False),
     }
-    start(data, models)
+    recommender = RecommenderSystem(
+        data,
+        num_sim_users=20,  # lower means less conservative
+        num_recommendations=10,
+        rating_model="xgboost",
+        helpfulness_model="xgboost_helpfulness",
+    )
+
+    start(
+        data,
+        models,
+        helpfullness_model=XGBoostHelpfulnessPredictionProcessor(),
+        recommender_model=recommender,
+    )
