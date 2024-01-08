@@ -10,10 +10,17 @@ import numpy as np
 def get_targets(series) -> np.ndarray:
     return series.to_numpy().astype(int) - 1
 
+# Use this for word2vec xgBoost
+use_word2vec = False
 
-# Vecorising input data
-input_df = load_preprocessed_data()
-input_col = "preprocessed_review/text"
+if use_word2vec:
+    with open("air/data/dataset_with_vectors.pkl", "rb") as f:
+        input_df = pickle.load(f)
+    input_col = "review/vectors"
+else:
+    input_df = load_preprocessed_data()
+    input_col = "preprocessed_review/text"
+
 output_col = "review/score"
 
 input_df = input_df.select([input_col, output_col]).with_row_count("row_nr")
@@ -45,22 +52,29 @@ val_data = test_data.sample(fraction=0.5, seed=123, shuffle=True)
 train_data = input_df.filter(pl.col("row_nr").is_in(test_data["row_nr"]).not_())
 test_data = test_data.filter(pl.col("row_nr").is_in(val_data["row_nr"]).not_())
 
-if not os.path.exists("air/data/models/xgboost_countvectorizer_full.pkl"):
-    count_vectorizer = CountVectorizer(binary=True)
-    count_vectorizer.fit(input_df[input_col])
+if(not use_word2vec):
+    if not os.path.exists("air/data/models/xgboost_countvectorizer_full.pkl"):
+        count_vectorizer = CountVectorizer(binary=True)
+        count_vectorizer.fit(input_df[input_col])
 
-    # Save the vectorizer
-    with open("air/data/models/xgboost_countvectorizer_full.pkl", "wb") as f:
-        pickle.dump(count_vectorizer, f)
-else:
-    with open("air/data/models/xgboost_countvectorizer_full.pkl", "rb") as f:
-        count_vectorizer = pickle.load(f)
+        # Save the vectorizer
+        with open("air/data/models/xgboost_countvectorizer_full.pkl", "wb") as f:
+            pickle.dump(count_vectorizer, f)
+    else:
+        with open("air/data/models/xgboost_countvectorizer_full.pkl", "rb") as f:
+            count_vectorizer = pickle.load(f)
 
 
 print("Transforming data")
-train_x = count_vectorizer.transform(train_data[input_col])
-test_x = count_vectorizer.transform(test_data[input_col])
-val_x = count_vectorizer.transform(val_data[input_col])
+if use_word2vec:
+    train_x = np.vstack(train_data[input_col])
+    test_x = np.vstack(test_data[input_col])
+    val_x = np.vstack(val_data[input_col])
+else:
+    train_x = count_vectorizer.transform(train_data[input_col])
+    test_x = count_vectorizer.transform(test_data[input_col])
+    val_x = count_vectorizer.transform(val_data[input_col])
+
 train_y = get_targets(train_data[output_col])
 test_y = get_targets(test_data[output_col])
 val_y = get_targets(val_data[output_col])
@@ -85,7 +99,12 @@ param = {
 }
 
 print("Training model")
-if not os.path.exists("air/data/models/xgboost_full.pkl"):
+if use_word2vec:
+    filename = "xgboost_word2vec"
+else:
+    filename = "xgboost_full"
+
+if not os.path.exists("air/data/models/{}.pkl".format(filename)):
     xgb_model = xgb.train(
         param,
         xgb_train,
@@ -94,11 +113,11 @@ if not os.path.exists("air/data/models/xgboost_full.pkl"):
         evals=[(xgb_val, "val")],
         num_boost_round=20,
     )
-    xgb_model.save_model("air/data/models/xgboost_full.json")
-    with open("air/data/models/xgboost_full.pkl", "wb") as f:
+    xgb_model.save_model("air/data/models/{}.json".format(filename))
+    with open("air/data/models/{}.pkl".format(filename), "wb") as f:
         pickle.dump(xgb_model, f)
 else:
-    with open("air/data/models/xgboost_full.pkl", "rb") as f:
+    with open("air/data/models/{}.pkl".format(filename), "rb") as f:
         xgb_model = pickle.load(f)
 
 
