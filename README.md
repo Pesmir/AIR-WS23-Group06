@@ -26,3 +26,9 @@ Advanced Information Retrieval Project 2023 for Group6
 ```bash
 python air/main.py
 ```
+
+## Dataset
+
+- https://www.kaggle.com/datasets/mohamedbakhet/amazon-books-reviews
+- Dataset of amazon reviews for books
+- Containing 142.8 million reviews of 212404 unique books
