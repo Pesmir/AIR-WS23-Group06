@@ -65,7 +65,11 @@ def main():
     res = XGBoostModelPredictionProcessor().process(res)
     res = BertModelPredictionProcessor(fine_tuned=False).process(res)
     res = BertModelPredictionProcessor(fine_tuned=True).process(res)
+
     # res = Word2VecModelPredictionProcessor().process(res)
+    # There was no prediction processor written for the
+    # Word2Vec XGboost model because the CountVectorizer XGBoost model
+    # peroforms better after training.
 
     # 2.5 Add Helpfulnes prediction
     res = XGBoostHelpfulnessPredictionProcessor().process(res)
